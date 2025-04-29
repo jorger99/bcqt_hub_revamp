@@ -1,0 +1,17 @@
+name: bcqthub
+channels:
+  - defaults
+  - conda-forge
+dependencies:
+  - python=3.12
+  - numpy=1
+  - scipy
+  - matplotlib
+  - pyvisa
+  - pyyaml
+  - pytest
+  - pip
+  - ipykernel
+  - jupyter
+  - pip:
+    - .
