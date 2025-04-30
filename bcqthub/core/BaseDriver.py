@@ -2,6 +2,7 @@ import logging
 import time
 from abc import ABC, abstractmethod
 import pyvisa
+from bcqthub.controllers.logging_utils import get_logger
 
 
 class BaseDriver(ABC):
@@ -9,7 +10,7 @@ class BaseDriver(ABC):
 
     _rm = None  # shared PyVISA ResourceManager singleton
 
-    def __init__(self, configs: dict, debug: bool = False, **kwargs):
+    def __init__(self, configs: dict, debug: bool = True, **kwargs):
         """
         :param configs: dict with keys:
             - 'instrument_name': human-readable name
@@ -18,25 +19,19 @@ class BaseDriver(ABC):
         :param debug: if True, set logger to DEBUG level
         """
         # Required configs
+        self.debug = debug
         self.configs = configs
-        self.instrument_name = configs.get("instrument_name", "Unknown")
+        self.instrument_name = configs.get("instrument_name", "UnknownInstrument")
         self.address = configs.get("address")
         if not self.address:
             raise ValueError("configs must include 'address' key with VISA resource string")
-        self.debug = debug
 
         # Internal state
         self.resource = None
         self.debug_writes = 0
 
-        # Logger setup
-        self.logger = logging.getLogger(self.instrument_name)
-        self.logger.setLevel(logging.DEBUG if self.debug else logging.INFO)
-        if not self.logger.handlers:
-            handler = logging.StreamHandler()
-            fmt = logging.Formatter(f"[{self.instrument_name}] %(levelname)s: %(message)s")
-            handler.setFormatter(fmt)
-            self.logger.addHandler(handler)
+        # Configure the logger and then create one for this instrument
+        self.log = get_logger(self.instrument_name, debug=debug)
 
         # Apply extra attributes
         self.set_default_attrs(**kwargs)
@@ -60,9 +55,9 @@ class BaseDriver(ABC):
             try:
                 BaseDriver._rm = (pyvisa.ResourceManager(backend)
                                   if backend else pyvisa.ResourceManager())
-                self.logger.debug("ResourceManager initialized")
+                self.log.debug("ResourceManager initialized")
             except Exception as e:
-                self.logger.error(f"Failed to initialize ResourceManager: {e}")
+                self.log.error(f"Failed to initialize ResourceManager: {e}")
                 raise
         self.rm = BaseDriver._rm
 
@@ -70,16 +65,16 @@ class BaseDriver(ABC):
         if self.resource:
             try:
                 self.resource.close()
-                self.logger.debug("Closed previous session")
+                self.log.debug("Closed previous session")
             except Exception as e:
-                self.logger.warning(f"Error closing session: {e}")
+                self.log.warning(f"Error closing session: {e}")
 
         # Open resource
         try:
             self.resource = self.rm.open_resource(self.address)
-            self.logger.info(f"Connected to {self.address}")
+            self.log.info(f"Connected to {self.address}")
         except Exception as e:
-            self.logger.error(f"Failed to open resource {self.address}: {e}")
+            self.log.error(f"Failed to open resource {self.address}: {e}")
             raise
 
     def disconnect(self):
@@ -87,9 +82,9 @@ class BaseDriver(ABC):
         if self.resource:
             try:
                 self.resource.close()
-                self.logger.info("Session closed")
+                self.log.info("Session closed")
             except Exception as e:
-                self.logger.warning(f"Error during disconnect: {e}")
+                self.log.warning(f"Error during disconnect: {e}")
             finally:
                 self.resource = None
 
@@ -101,12 +96,12 @@ class BaseDriver(ABC):
     # --- SCPI wrappers ---
     def write(self, cmd: str):
         """Write command to instrument with debug logging."""
-        self.logger.debug(f"WRITE: {cmd}")
+        self.log.debug(f"WRITE: {cmd}")
         return self.resource.write(cmd)
 
     def read(self) -> str:
         """Read raw string from instrument."""
-        self.logger.debug("READ")
+        self.log.debug("READ")
         return self.resource.read()
 
     def write_check(self, cmd: str):
@@ -121,7 +116,7 @@ class BaseDriver(ABC):
 
     def query(self, cmd: str) -> str:
         """Send query and return raw string."""
-        self.logger.debug(f"QUERY: {cmd}")
+        self.log.debug(f"QUERY: {cmd}")
         return self.resource.query(cmd)
 
     def query_check(self, cmd: str, fmt=str) -> any:
@@ -150,61 +145,61 @@ class BaseDriver(ABC):
                     val = getattr(self, name)()
                     params[name] = val
                     if print_output:
-                        self.logger.info(f"{name}: {val}")
+                        self.log.info(f"{name}: {val}")
                 except Exception as e:
-                    self.logger.warning(f"Error in {name}: {e}")
+                    self.log.warning(f"Error in {name}: {e}")
         return params
 
     def set_default_attrs(self, **kwargs):
         """Set and log extra attributes from configs."""
         for k, v in kwargs.items():
             setattr(self, k, v)
-            self.logger.debug(f"Set attribute {k}={v}")
+            self.log.debug(f"Set attribute {k}={v}")
 
     # --- Error handlers ---
     def handle_VisaIOError(self, cmd: str, err: Exception):
-        self.logger.error(f"VisaIOError on '{cmd}': {err}")
+        self.log.error(f"VisaIOError on '{cmd}': {err}")
         queue = self.check_instr_error_queue(print_output=True)
-        self.logger.error(f"Error queue: {queue}")
+        self.log.error(f"Error queue: {queue}")
 
     def handle_InvalidSession_error(self, cmd: str, err: Exception):
-        self.logger.warning(f"InvalidSession on '{cmd}': {err}, reconnecting...")
+        self.log.warning(f"InvalidSession on '{cmd}': {err}, reconnecting...")
         time.sleep(1)
         self.connect()
 
     # --- Debug utilities ---
     def debug_read(self, extra="") -> str:
-        self.logger.debug(f"{extra} Attempting read (writes={self.debug_writes})")
+        self.log.debug(f"{extra} Attempting read (writes={self.debug_writes})")
         result = self.read()
         self.debug_writes = max(0, self.debug_writes - 1)
-        self.logger.debug(f"Read success (writes={self.debug_writes}): {result}")
+        self.log.debug(f"Read success (writes={self.debug_writes}): {result}")
         return result
 
     def debug_write(self, cmd: str, extra="", count=True):
-        self.logger.debug(f"{extra} Attempting write '{cmd}' (writes={self.debug_writes})")
+        self.log.debug(f"{extra} Attempting write '{cmd}' (writes={self.debug_writes})")
         self.write(cmd)
         if count:
             self.debug_writes += 1
-        self.logger.debug(f"Write success (writes={self.debug_writes})")
+        self.log.debug(f"Write success (writes={self.debug_writes})")
 
     def debug_force_clear(self):
         """Continuously read until exception to clear buffer."""
         self.debug_writes = 0
-        self.logger.debug("Starting force clear loop")
+        self.log.debug("Starting force clear loop")
         try:
             i = 0
             while True:
                 time.sleep(1)
-                self.logger.debug(f"Force clear iteration {i}")
+                self.log.debug(f"Force clear iteration {i}")
                 self.debug_read()
                 i += 1
         except Exception as e:
-            self.logger.info(f"Force clear stopped: {e}")
+            self.log.info(f"Force clear stopped: {e}")
 
     def debug_queue_script(self, init_cmd=None, sleep_time=0.5, write_cmd_loop=None):
         """Loop read/write to stress-test session stability."""
         self.debug = True
-        self.logger.debug("Starting debug_queue_script")
+        self.log.debug("Starting debug_queue_script")
         if init_cmd:
             self.debug_write(init_cmd, extra="INIT", count=False)
         count = 0
@@ -217,4 +212,4 @@ class BaseDriver(ABC):
                 count += 1
                 time.sleep(sleep_time)
         except KeyboardInterrupt:
-            self.logger.info(f"debug_queue_script stopped after {count} iterations")
+            self.log.info(f"debug_queue_script stopped after {count} iterations")

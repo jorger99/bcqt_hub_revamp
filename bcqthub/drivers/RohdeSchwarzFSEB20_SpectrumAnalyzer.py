@@ -1,4 +1,3 @@
-import logging
 import time
 import datetime
 from bcqthub.core.BaseDriver import BaseDriver
@@ -30,7 +29,7 @@ class RohdeSchwarzFSEB20_SpectrumAnalyzer(BaseDriver):
         """Set IF bandwidth in Hz."""
         self.write_check(f"SENS:BAND {ifbw}")
         bw = self.get_IF_bandwidth()
-        self.logger.info(f"IF bandwidth set to {bw} Hz")
+        self.log.info(f"IF bandwidth set to {bw} Hz")
 
     # Center Frequency
     def get_freq_center_Hz(self) -> float:
@@ -39,7 +38,7 @@ class RohdeSchwarzFSEB20_SpectrumAnalyzer(BaseDriver):
     def set_freq_center_Hz(self, freq_center_hz: float):
         self.write_check(f"FREQ:CENT {freq_center_hz} HZ")
         cf = self.get_freq_center_Hz()
-        self.logger.info(f"Center frequency set to {cf} Hz")
+        self.log.info(f"Center frequency set to {cf} Hz")
 
     # Frequency Span
     def get_freq_span_Hz(self) -> float:
@@ -48,7 +47,7 @@ class RohdeSchwarzFSEB20_SpectrumAnalyzer(BaseDriver):
     def set_freq_span_Hz(self, freq_span_hz: float):
         self.write_check(f"FREQ:SPAN {freq_span_hz}")
         span = self.get_freq_span_Hz()
-        self.logger.info(f"Frequency span set to {span} Hz")
+        self.log.info(f"Frequency span set to {span} Hz")
 
     # Averaging
     def get_num_averages(self) -> int:
@@ -57,7 +56,7 @@ class RohdeSchwarzFSEB20_SpectrumAnalyzer(BaseDriver):
     def set_num_averages(self, num_averages: int):
         self.write_check(f"AVER:COUN {num_averages}")
         navg = self.get_num_averages()
-        self.logger.info(f"Number of averages set to {navg}")
+        self.log.info(f"Number of averages set to {navg}")
 
     # Continuous Sweep
     def toggle_continuous_sweep(self, sweep_mode: bool = None):
@@ -68,13 +67,13 @@ class RohdeSchwarzFSEB20_SpectrumAnalyzer(BaseDriver):
             new_state = "ON" if sweep_mode else "OFF"
         self.write_check(f"INIT:CONT {new_state}")
         state = self.query_check("INIT:CONT?", fmt=str)
-        self.logger.info(f"Continuous sweep mode = {state}")
+        self.log.info(f"Continuous sweep mode = {state}")
 
     # Trigger Sweep
     def trigger_sweep(self):
         st = self.query_check("SENSE:SWE:TIME?", fmt=str)
         sweep_time = float(self.strip_specials(st))
-        self.logger.debug(f"Sweep time = {sweep_time}")
+        self.log.debug(f"Sweep time = {sweep_time}")
         self.write_check("*TRG")
         self.write_check("INIT:DISP ON")
         start = time.time()
@@ -82,22 +81,22 @@ class RohdeSchwarzFSEB20_SpectrumAnalyzer(BaseDriver):
             time.sleep(0.5)
             elapsed = time.time() - start
             status = self.query_check("STAT:OPER:COND?", fmt=str).strip()
-            self.logger.debug(f"Sweep status = {status}")
+            self.log.debug(f"Sweep status = {status}")
             if status != "0":
                 ts = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                self.logger.info(f"[{ts}] Sweep finished in {elapsed:.2f}s")
+                self.log.info(f"[{ts}] Sweep finished in {elapsed:.2f}s")
                 break
         self.write_check("INIT:CONT OFF")
 
     # Marker Methods
     def send_marker_to_max(self):
         self.write_check("CALC:MARK:MAX")
-        self.logger.info("Marker set to max peak")
+        self.log.info("Marker set to max peak")
 
     def read_marker_freq_amp(self) -> tuple:
         freq = float(self.query_check("CALC:MARK:X?", fmt=float))
         amp = float(self.query_check("CALC:MARK:Y?", fmt=float))
-        self.logger.info(f"Marker: freq = {freq} Hz, amp = {amp} dBm")
+        self.log.info(f"Marker: freq = {freq} Hz, amp = {amp} dBm")
         return freq, amp
 
     # Data Retrieval
@@ -108,15 +107,12 @@ class RohdeSchwarzFSEB20_SpectrumAnalyzer(BaseDriver):
 
 if __name__ == "__main__":
     """Example usage for RohdeSchwarzFSEB20SpectrumAnalyzer."""
-    import logging
-    logging.basicConfig(level=logging.DEBUG, format="[%(name)s] %(levelname)s: %(message)s")
 
     cfg = {
-        "instrument_name": "SA_RnS_FSEB20",
+        "instrument_name": "RS_SpectrumAnalyzer",
         "address": "GPIB::20::INSTR",
     }
-    RS_SpectrumAnalyzer = RohdeSchwarzFSEB20_SpectrumAnalyzer
-    RS_SpectrumAnalyzer = 1
+    RS_SpectrumAnalyzer = RohdeSchwarzFSEB20_SpectrumAnalyzer(cfg)
     
     print(RS_SpectrumAnalyzer.idn())
     
@@ -128,7 +124,8 @@ if __name__ == "__main__":
     
     RS_SpectrumAnalyzer.set_freq_span_Hz(1e6)
     print(RS_SpectrumAnalyzer.get_freq_span_Hz())
-    
+
+
     RS_SpectrumAnalyzer.set_num_averages(10)
     print(RS_SpectrumAnalyzer.get_num_averages())
     

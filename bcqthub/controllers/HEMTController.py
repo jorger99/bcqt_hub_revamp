@@ -1,7 +1,7 @@
 import time
 import numpy as np
-from bcqthub.controllers.LoggingUtils import configure_logger
 from bcqthub.drivers.KeysightEDU36311A_PowerSupply import KeysightEDU36311A_PowerSupply
+from bcqthub.controllers.logging_utils import get_logger
 
 
 class HEMTController:
@@ -14,7 +14,8 @@ class HEMTController:
         Additional kwargs passed to the PSU driver.
         """
         self.instrument_name = configs.get('instrument_name', 'HEMTController')
-        self.logger = configure_logger(self.instrument_name, debug)
+        self.log = get_logger(self.instrument_name, debug=debug)
+
 
         # Instantiate the underlying PSU driver
         self.psu = KeysightEDU36311A_PowerSupply(configs, debug=debug, **kwargs)
@@ -29,7 +30,7 @@ class HEMTController:
 
     def reset(self):
         """Turn off outputs and zero both channels."""
-        self.logger.info("Resetting PSU outputs and voltages to zero.")
+        self.log.info("Resetting PSU outputs and voltages to zero.")
         self.psu.set_output(False)
         for ch in (self.gate_channel, self.drain_channel):
             self.psu.set_channel_voltage(ch, 0.0)
@@ -47,12 +48,12 @@ class HEMTController:
 
         data = []
         for v in volts:
-            self.logger.info(f"Setting CH{channel} -> {v:.3f} V")
+            self.log.info(f"Setting CH{channel} -> {v:.3f} V")
             self.psu.set_channel_voltage(channel, v)
             try:
                 i = self.psu.get_channel_current(channel)
             except Exception as e:
-                self.logger.error(f"Failed to read current at {v} V: {e}")
+                self.log.error(f"Failed to read current at {v} V: {e}")
                 i = float('nan')
             data.append((v, i))
             time.sleep(delay)

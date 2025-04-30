@@ -1,4 +1,3 @@
-import logging
 from bcqthub.core.BaseDriver import BaseDriver
 
 class AnritsuMG369XX_SignalGenerator(BaseDriver):
@@ -29,10 +28,10 @@ class AnritsuMG369XX_SignalGenerator(BaseDriver):
             power = self.get_power()
             freq = self.get_freq()
             output = self.get_output()
-            self.logger.info("Instrument parameters (old style):")
-            self.logger.info(f"  Output = {output}")
-            self.logger.info(f"  Frequency = {freq/1e9:.2f} GHz")
-            self.logger.info(f"  Power = {power} dBm")
+            self.log.info("Instrument parameters (old style):")
+            self.log.info(f"  Output = {output}")
+            self.log.info(f"  Frequency = {freq/1e9:.2f} GHz")
+            self.log.info(f"  Power = {power} dBm")
             return power, freq, output
         return params
 
@@ -41,16 +40,16 @@ class AnritsuMG369XX_SignalGenerator(BaseDriver):
         """Query the output state."""
         status = bool(self.query_check("OUTP:STAT?", fmt=int))
         if print_output:
-            self.logger.info(f"Output status: {status}")
+            self.log.info(f"Output status: {status}")
         return status
 
     def set_output(self, setting: bool):
         """Set the output state."""
         current = self.get_output()
         if current == setting:
-            self.logger.warning(f"Output already {'ON' if setting else 'OFF'}")
+            self.log.warning(f"Output already {'ON' if setting else 'OFF'}")
         else:
-            self.logger.info(f"Setting output to {'ON' if setting else 'OFF'}")
+            self.log.info(f"Setting output to {'ON' if setting else 'OFF'}")
             self.write_check(f"OUTP:STAT {int(setting)}")
 
     # --- Power Methods ---
@@ -61,13 +60,13 @@ class AnritsuMG369XX_SignalGenerator(BaseDriver):
     def set_power(self, power_dBm: float, override_safety: bool = False):
         """Set the power level, enforcing safety unless overridden."""
         if not override_safety and power_dBm > 0:
-            self.logger.error("Power > 0 dBm without override_safety; aborting")
+            self.log.error("Power > 0 dBm without override_safety; aborting")
             raise ValueError("Use override_safety=True to override safety limit")
         if override_safety and power_dBm >= 0:
-            self.logger.warning("Override safety: setting power ≥ 0 dBm")
+            self.log.warning("Override safety: setting power ≥ 0 dBm")
         self.write_check(f"SOUR:POW:LEV:IMM:AMPL {power_dBm} dBm")
         new_power = self.get_power()
-        self.logger.info(f"Power set to {new_power} dBm")
+        self.log.info(f"Power set to {new_power} dBm")
 
     # --- Frequency Methods ---
     def get_freq(self) -> float:
@@ -78,22 +77,20 @@ class AnritsuMG369XX_SignalGenerator(BaseDriver):
         """Set the frequency in Hz, with optional unit warnings."""
         if not self.suppress_warnings:
             if frequency <= 1e0:
-                self.logger.error(f"Received {frequency}: likely GHz instead of Hz")
+                self.log.error(f"Received {frequency}: likely GHz instead of Hz")
                 raise ValueError("Check frequency units; expected Hz")
             elif frequency <= 1e3:
-                self.logger.error(f"Received {frequency}: likely MHz instead of Hz")
+                self.log.error(f"Received {frequency}: likely MHz instead of Hz")
                 raise ValueError("Check frequency units; expected Hz")
             elif frequency <= 1e6:
-                self.logger.warning(f"Received {frequency}: likely kHz instead of Hz; proceeding")
+                self.log.warning(f"Received {frequency}: likely kHz instead of Hz; proceeding")
         self.write_check(f"SOUR:FREQ:CW {frequency} HZ")
         new_freq = self.get_freq()
-        self.logger.info(f"Frequency set to {new_freq} Hz")
+        self.log.info(f"Frequency set to {new_freq} Hz")
 
 
 if __name__ == "__main__":
     """Example usage for SG_Anritsu driver."""
-    import logging
-    logging.basicConfig(level=logging.DEBUG, format="[%(name)s] %(levelname)s: %(message)s")
 
     cfg = {"instrument_name": "TEST_ANRITSU", 
            "address": "GPIB::9::INSTR", 
