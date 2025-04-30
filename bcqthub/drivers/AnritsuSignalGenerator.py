@@ -1,13 +1,13 @@
 import logging
 from bcqthub.core.BaseDriver import BaseDriver
 
-
-class SG_Anritsu(BaseDriver):
+class AnritsuMG369XX_SignalGenerator(BaseDriver):
     """Anritsu signal generator driver using SCPI."""
 
     def __init__(self, configs: dict, debug: bool = False, **kwargs):
         """
-        :param configs: must include 'instrument_name' and 'address'; may include 'suppress_warnings' and 'rm_backend'
+        :param configs: must include 'instrument_name' and 'address';
+                        may include 'suppress_warnings' and 'rm_backend'
         :param debug: enable debug-level logging
         """
         address = configs.get("address")
@@ -22,7 +22,7 @@ class SG_Anritsu(BaseDriver):
 
     def return_instrument_parameters(self, print_output: bool = False, old_output: bool = False):
         """
-        Return dict of all get_* parameters; or in old style tuple if requested.
+        Return dict of all get_* parameters; or in old‐style tuple if requested.
         """
         params = super().return_instrument_parameters(print_output=print_output)
         if old_output and print_output:
@@ -59,12 +59,12 @@ class SG_Anritsu(BaseDriver):
         return float(self.query_check("SOUR:POW:LEV:IMM:AMPL?", fmt=float))
 
     def set_power(self, power_dBm: float, override_safety: bool = False):
-        """Set the power level, enforcing safety limits unless overridden."""
+        """Set the power level, enforcing safety unless overridden."""
         if not override_safety and power_dBm > 0:
-            self.logger.error("Power > 0 dBm without override_safety; aborting command")
+            self.logger.error("Power > 0 dBm without override_safety; aborting")
             raise ValueError("Use override_safety=True to override safety limit")
         if override_safety and power_dBm >= 0:
-            self.logger.warning("Override safety: setting power >= 0 dBm")
+            self.logger.warning("Override safety: setting power ≥ 0 dBm")
         self.write_check(f"SOUR:POW:LEV:IMM:AMPL {power_dBm} dBm")
         new_power = self.get_power()
         self.logger.info(f"Power set to {new_power} dBm")
@@ -98,11 +98,15 @@ if __name__ == "__main__":
     cfg = {"instrument_name": "TEST_ANRITSU", 
            "address": "GPIB::9::INSTR", 
            "suppress_warnings": False}
-    with SG_Anritsu(cfg, debug=True) as sg:
-        print(sg.idn())
-        sg.set_output(True)
-        print(sg.get_output())
-        sg.set_freq(1e9)
-        print(sg.get_freq())
-        sg.set_power(-10)
-        print(sg.get_power())
+    
+    SG_Anritsu = AnritsuMG369XX_SignalGenerator(cfg)
+    print(SG_Anritsu.idn())
+    
+    SG_Anritsu.set_output(True)
+    print(SG_Anritsu.get_output())
+    
+    SG_Anritsu.set_freq(1e9)
+    print(SG_Anritsu.get_freq())
+    
+    SG_Anritsu.set_power(-10)
+    print(SG_Anritsu.get_power())
