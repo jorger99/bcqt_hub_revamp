@@ -1,4 +1,4 @@
-name: bcqthub
+name: bcqthubv2
 channels:
   - defaults
   - conda-forge
@@ -9,9 +9,8 @@ dependencies:
   - matplotlib
   - pyvisa
   - pyyaml
-  - pytest
-  - pip
   - ipykernel
   - jupyter
+  - pip
   - pip:
     - .
