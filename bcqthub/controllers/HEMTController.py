@@ -1,108 +1,185 @@
+# bcqthub/controllers/hemt_controller.py
+
+import time, logging
+import numpy as np
+
+# absolute import of your helper
+from bcqthub.controllers.logging_utils import get_logger, run_with_progress
+from bcqthub.drivers.KeysightEDU36311A_PowerSupply import KeysightEDU36311A_PowerSupply
 import time
 import numpy as np
-from bcqthub.drivers.KeysightEDU36311A_PowerSupply import KeysightEDU36311A_PowerSupply
-from bcqthub.controllers.logging_utils import get_logger
+import logging
 
+from bcqthub.controllers.logging_utils import get_logger, run_with_progress
+from bcqthub.drivers.KeysightEDU36311A_PowerSupply import KeysightEDU36311A_PowerSupply
 
 class HEMTController:
-    """Controller for HEMT IV sweeps using a Keysight EDU36311A PSU."""
+    """Controlled soft-start and shutdown for HEMT amplifiers via a Keysight PSU."""
+    def __init__(self, configs, debug=False, **kwargs):
+        self.debug = debug
+        self.log   = get_logger("HEMTController", debug)
 
-    def __init__(self, configs: dict, debug: bool = False, **kwargs):
-        """
-        :param configs: must include 'instrument_name' and 'address'; may include 'rm_backend'
-        :param debug: enable debug-level logging
-        Additional kwargs passed to the PSU driver.
-        """
-        self.instrument_name = configs.get('instrument_name', 'HEMTController')
-        self.log = get_logger(self.instrument_name, debug=debug)
-
-
-        # Instantiate the underlying PSU driver
+        self.log.info("Connecting to Keysight PSU for HEMT control")
         self.psu = KeysightEDU36311A_PowerSupply(configs, debug=debug, **kwargs)
 
-        # Default channels (can override via kwargs)
-        self.gate_channel = kwargs.get('gate_channel', 1)
-        self.drain_channel = kwargs.get('drain_channel', 2)
-
-    def idn(self) -> str:
-        """Proxy *IDN? to the PSU."""
-        return self.psu.idn()
-
+        self.gate_channel  = kwargs.get("gate_channel", 1)
+        self.drain_channel = kwargs.get("drain_channel", 2)
+        
     def reset(self):
-        """Turn off outputs and zero both channels."""
-        self.log.info("Resetting PSU outputs and voltages to zero.")
-        self.psu.set_output(False)
-        for ch in (self.gate_channel, self.drain_channel):
-            self.psu.set_channel_voltage(ch, 0.0)
+        """Reset (clear faults, zero, turn off) just the HEMT channels."""
+        self.log.info("Resetting PSU to safe state for HEMT channels")
+        self.psu.reset(channels=[self.gate_channel, self.drain_channel])
 
-    def ramp_voltage(self, channel: int, start: float, stop: float,
-                     step: float = 0.01, delay: float = 1.0) -> list:
-        """
-        Ramp a channel from start to stop in increments of step, waiting delay seconds.
-        Returns a list of (voltage, current) tuples.
-        """
-        if stop > start:
-            volts = np.arange(start, stop + step, abs(step))
-        else:
-            volts = np.arange(start, stop - step, -abs(step))
+    def dump_debug(self):
+        """Convenience to dump the PSU’s debug snapshot."""
+        self.log.info("=== HEMTController: Dumping PSU debug info ===")
+        self.psu.dump_debug_info()
+        self.log.info("===============================================")
 
-        data = []
-        for v in volts:
-            self.log.info(f"Setting CH{channel} -> {v:.3f} V")
+    def set_debug(self, dbg: bool):
+        """Enable or disable debug logging on both controller + PSU."""
+        self.debug = dbg
+        lvl = logging.DEBUG if dbg else logging.INFO
+        self.log.setLevel(lvl)
+        self.psu.log.setLevel(lvl)
+
+    def ramp_voltage(self, channel, start, stop, step, delay):
+        """
+        Smoothly ramp a channel from start→stop in increments of step,
+        returning a list of (voltage, current) pairs, with a live tqdm bar.
+
+        During the bar, driver DEBUG logs will appear only if self.debug is True.
+        """
+        # Build the voltage setpoint list
+        direction = 1 if stop > start else -1
+        volts = list(
+            np.arange(start, stop + direction * step, direction * abs(step))
+        )
+        total = len(volts)
+
+        # Log the overall plan at INFO
+        self.log.info(f"Ramping CH{channel}: {start:.3f}→{stop:.3f} V over {total} steps")
+
+        # Temporarily suppress or allow all PSU logs under the bar
+        prev_disabled        = self.psu.log.disabled
+        self.psu.log.disabled = not self.debug
+
+        # Define the per-step action
+        def step_fn(v):
             self.psu.set_channel_voltage(channel, v)
-            try:
-                i = self.psu.get_channel_current(channel)
-            except Exception as e:
-                self.log.error(f"Failed to read current at {v} V: {e}")
-                i = float('nan')
-            data.append((v, i))
-            time.sleep(delay)
+            return v, self.psu.get_channel_current(channel)
+
+        # Run the tqdm helper
+        data = run_with_progress(
+            iterable=volts,
+            step_fn=step_fn,
+            desc=f"CH{channel} {start:.3f}→{stop:.3f}V",
+            delay=delay,
+            metrics=("V", "I"),
+        )
+
+        # Restore the PSU logger’s enabled/disabled state
+        self.psu.log.disabled = prev_disabled
+
         return data
 
-    def monitor_iv(self, channel: int, target: float=None, tol: float=1e-6) -> tuple:
+    def turn_on(self, gate_stop, drain_stop, step, delay):
         """
-        Read current and voltage once. If a target is given, returns
-        (True, (v,i)) when |i-target|<tol, else (False, (v,i)).
-        """
-        v = self.psu.get_channel_voltage(channel)
-        i = self.psu.get_channel_current(channel)
-        hit = False
-        if target is not None and abs(i - target) < tol:
-            hit = True
-        return hit, (v, i)
-
-    def turn_on(self, gate_stop: float=1.1, drain_stop: float=0.7,
-                step: float=0.01, delay: float=1.0) -> tuple:
-        """
-        Full HEMT turn-on sequence: reset → ramp gate → ramp drain.
+        Full soft-start: reset → enable outputs → ramp gate → ramp drain.
         Returns (gate_trace, drain_trace).
         """
-        self.reset()
-        gate_trace = self.ramp_voltage(self.gate_channel, 0.0, gate_stop, step, delay)
-        drain_trace = self.ramp_voltage(self.drain_channel, 0.0, drain_stop, step, delay)
-        self.psu.set_output(True)
-        return gate_trace, drain_trace
-
-    def turn_off(self, gate_start: float=1.1, drain_start: float=0.7,
-                 step: float=0.01, delay: float=1.0):
-        """
-        Full HEMT turn-off sequence: ramp drain down → ramp gate down → reset.
-        """
-        self.ramp_voltage(self.drain_channel, drain_start, 0.0, -abs(step), delay)
-        self.ramp_voltage(self.gate_channel, gate_start, 0.0, -abs(step), delay)
+        self.log.info("Beginning HEMT soft-start sequence")
         self.reset()
 
+        # enable outputs
+        self.psu.set_output(True, channel=self.gate_channel)
+        self.psu.set_output(True, channel=self.drain_channel)
+        self.log.info(
+            f"Outputs enabled on CH{self.gate_channel} & CH{self.drain_channel}"
+        )
 
-if __name__ == "__main__":
-    """Example usage of HEMTController."""
+        # ramp each channel
+        gate_data  = self.ramp_voltage(
+            channel=self.gate_channel,
+            start=0.0,
+            stop=gate_stop,
+            step=step,
+            delay=delay,
+        )
+        drain_data = self.ramp_voltage(
+            channel=self.drain_channel,
+            start=0.0,
+            stop=drain_stop,
+            step=step,
+            delay=delay,
+        )
 
-    cfg = {
-        'instrument_name': 'HEMT_PSU',
-        'address': 'TCPIP0::192.168.0.106::inst0::INSTR'
-    }
-    HEMT_PSU = HEMTController(cfg, debug=True)
-    print("PSU IDN:", HEMT_PSU.idn())
-    gate_iv, drain_iv = HEMT_PSU.turn_on()
-    print("Gate I–V points:", gate_iv)
-    print("Drain I–V points:", drain_iv)
-    HEMT_PSU.turn_off()
+        self.log.info("HEMT soft-start complete")
+        return gate_data, drain_data
+
+    def turn_off(self, gate_start, drain_start, step, delay):
+        """
+        Full soft-shutdown: ramp drain down → ramp gate down → reset.
+        Returns (gate_trace, drain_trace).
+        """
+        self.log.info("Beginning HEMT soft-shutdown sequence")
+
+        drain_data = self.ramp_voltage(
+            channel=self.drain_channel,
+            start=drain_start,
+            stop=0.0,
+            step=-abs(step),
+            delay=delay,
+        )
+        gate_data = self.ramp_voltage(
+            channel=self.gate_channel,
+            start=gate_start,
+            stop=0.0,
+            step=-abs(step),
+            delay=delay,
+        )
+
+        self.reset()
+        self.log.info("HEMT soft-shutdown complete")
+        return gate_data, drain_data
+
+#################################################
+#################################################
+#################################################
+    
+import matplotlib.pyplot as plt
+
+def plot_iv_pair(gate_data, drain_data):
+    """
+    Plot Gate and Drain I–V curves side by side.
+
+    :param gate_data: list of (voltage, current) tuples for gate channel
+    :param drain_data: list of (voltage, current) tuples for drain channel
+    """
+    # Unpack data
+    gate_v, gate_i = zip(*gate_data)
+    drain_v, drain_i = zip(*drain_data)
+
+    # Create subplots
+    # fig, (ax1, ax2) = plt.subplots(nrows=2, ncols=1, figsize=(8, 8))
+    fig, ax1 = plt.subplots(nrows=1, ncols=1, figsize=(8, 5))
+
+    # Gate I–V curve
+    ax1.plot(gate_v, gate_i, 'b*-', label="Ch1 [Gate]")
+    ax1.set_xlabel("Voltage (V)")
+    ax1.set_ylabel("Current (A)")
+
+    # Drain I–V curve
+    ax1.plot(drain_v, drain_i, 'r*-', label="Ch2 [Drain]")
+    ax1.set_xlabel("Voltage (V)")
+    ax1.set_ylabel("Current (A)")
+
+    ax1.legend()
+    fig.suptitle("HEMT I-V Curves")
+    
+    fig.tight_layout()
+    
+    return fig
+
+
+
