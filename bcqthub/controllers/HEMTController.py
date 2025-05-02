@@ -14,7 +14,8 @@ from bcqthub.controllers.logging_utils import get_logger, run_with_progress
 from bcqthub.drivers.KeysightEDU36311A_PowerSupply import KeysightEDU36311A_PowerSupply
 
 class HEMTController:
-    """Controlled soft-start and shutdown for HEMT amplifiers via a Keysight PSU."""
+    """Controlled soft-start and shutdown for HEMT amplifiers"""
+    
     def __init__(self, configs, debug=False, **kwargs):
         self.debug = debug
         self.log   = get_logger("HEMTController", debug)
@@ -25,10 +26,12 @@ class HEMTController:
         self.gate_channel  = kwargs.get("gate_channel", 1)
         self.drain_channel = kwargs.get("drain_channel", 2)
         
+        
     def reset(self):
         """Reset (clear faults, zero, turn off) just the HEMT channels."""
         self.log.info("Resetting PSU to safe state for HEMT channels")
         self.psu.reset(channels=[self.gate_channel, self.drain_channel])
+        
 
     def dump_debug(self):
         """Convenience to dump the PSU’s debug snapshot."""
@@ -36,12 +39,14 @@ class HEMTController:
         self.psu.dump_debug_info()
         self.log.info("===============================================")
 
+
     def set_debug(self, dbg: bool):
         """Enable or disable debug logging on both controller + PSU."""
         self.debug = dbg
         lvl = logging.DEBUG if dbg else logging.INFO
         self.log.setLevel(lvl)
         self.psu.log.setLevel(lvl)
+        
 
     def ramp_voltage(self, channel, start, stop, step, delay):
         """
@@ -83,32 +88,42 @@ class HEMTController:
 
         return data
 
+
     def turn_on(self, gate_stop, drain_stop, step, delay):
         """
-        Full soft-start: reset → enable outputs → ramp gate → ramp drain.
-        Returns (gate_trace, drain_trace).
+            Full soft-start: reset → enable outputs → ramp gate → ramp drain.
+            Returns (gate_trace, drain_trace).
         """
         self.log.info("Beginning HEMT soft-start sequence")
-        self.reset()
-
+        
+        # cancel this method if the channel is on- 
+        # we cannot go from on to off without ramping!!!
+        if self.psu.get_output() is False:
+            raise ZeroDivisionError("We cannot turn the HEMT on if it is currently on!!!!")
+        
+        # get current start values
+        gate_start = self.psu.get_channel_voltage(self.gate_channel)
+        drain_start = self.psu.get_channel_voltage(self.drain_channel)
+        
         # enable outputs
         self.psu.set_output(True, channel=self.gate_channel)
         self.psu.set_output(True, channel=self.drain_channel)
         self.log.info(
             f"Outputs enabled on CH{self.gate_channel} & CH{self.drain_channel}"
         )
-
-        # ramp each channel
+        
+        # turn on gate first!
         gate_data  = self.ramp_voltage(
             channel=self.gate_channel,
-            start=0.0,
+            start=gate_start,
             stop=gate_stop,
             step=step,
             delay=delay,
         )
+        # turn on drain second!!
         drain_data = self.ramp_voltage(
             channel=self.drain_channel,
-            start=0.0,
+            start=drain_start,
             stop=drain_stop,
             step=step,
             delay=delay,
@@ -117,25 +132,36 @@ class HEMTController:
         self.log.info("HEMT soft-start complete")
         return gate_data, drain_data
 
+
     def turn_off(self, gate_start, drain_start, step, delay):
         """
-        Full soft-shutdown: ramp drain down → ramp gate down → reset.
-        Returns (gate_trace, drain_trace).
+            Full soft-shutdown: ramp drain down → ramp gate down → reset.
+            Returns (gate_trace, drain_trace).
         """
         self.log.info("Beginning HEMT soft-shutdown sequence")
 
+        # cancel this method if the channel is on- 
+        # we cannot go from on to off without ramping!!!
+        if self.psu.get_output() is True:
+            raise ZeroDivisionError("We cannot turn the HEMT OFF if it is currently OFF!!!!")
+        
+        gate_start = self.psu.get_channel_voltage(self.gate_channel)
+        drain_start = self.psu.get_channel_voltage(self.drain_channel)
+        
+        # turn off drain first!!
         drain_data = self.ramp_voltage(
             channel=self.drain_channel,
             start=drain_start,
             stop=0.0,
-            step=-abs(step),
+            step=-1*abs(step),
             delay=delay,
         )
+        # turn off voltage second!!
         gate_data = self.ramp_voltage(
             channel=self.gate_channel,
             start=gate_start,
             stop=0.0,
-            step=-abs(step),
+            step=-1*abs(step),
             delay=delay,
         )
 
