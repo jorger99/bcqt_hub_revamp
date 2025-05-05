@@ -11,7 +11,6 @@ cfg = {
     "instrument_name": "HEMT_PSU",
     # "address"        : "TCPIP0::192.168.0.106::inst0::INSTR",
     "address"        : "TestInstrument",
-    ######### "use_factory_limits": True,
 }
 
 ctrl = HEMTController(cfg, debug=False)
