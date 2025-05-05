@@ -15,14 +15,33 @@ from bcqthub.drivers.KeysightEDU36311A_PowerSupply import KeysightEDU36311A_Powe
 
 class HEMTController:
     """Controlled soft-start and shutdown for HEMT amplifiers"""
-    
-    def __init__(self, configs, debug=False, **kwargs):
+
+
+    def __init__(self, configs, debug=False, driver=KeysightEDU36311A_PowerSupply, **kwargs):
+        
+        # pick real or fake
+        if driver is None:
+            from bcqthub.drivers.keysight_edu36311a import KeysightEDU36311A
+            self.psu = KeysightEDU36311A(cfg, debug=debug)
+        elif isinstance(driver, BaseDriver):
+            self.psu = driver
+        elif issubclass(driver, BaseDriver):
+            self.psu = driver(cfg, debug=debug)
+        else:
+            raise ValueError("driver must be None, a BaseDriver subclass, or instance")
+
+
+
         self.debug = debug
         self.log   = get_logger("HEMTController", debug)
 
         self.log.info("Connecting to Keysight PSU for HEMT control")
-        self.psu = KeysightEDU36311A_PowerSupply(configs, debug=debug, **kwargs)
-
+        
+        # add the ability to insert a different driver besides EDU36311
+        driver_cls    = driver_cls or KeysightEDU36311A_PowerSupply
+        driver_kwargs = driver_kwargs or {}
+        self.psu      = driver_cls(configs, debug=debug, **driver_kwargs)
+        
         self.gate_channel  = kwargs.get("gate_channel", 1)
         self.drain_channel = kwargs.get("drain_channel", 2)
         
