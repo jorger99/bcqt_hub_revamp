@@ -1,81 +1,108 @@
-import logging, time
+"""
+logging_utils.py
+
+Minimal logging utilities:
+- run_with_progress: show tqdm bar with two metrics
+- TqdmHandler: print logs above tqdm bars
+- RotatingTxtHandler: rotate .txt logs by size, keep all files
+- FolderWarnHandler: warn once if logs folder grows too big
+- get_logger: set up handlers with defaults
+"""
+import logging
+from logging.handlers import RotatingFileHandler
+from pathlib import Path
 from tqdm.notebook import tqdm
+import time
 
-def run_with_progress(
-    iterable,
-    step_fn,
-    desc="Progress",
-    delay=0.0,
-    metrics=("V","I"),
-    ascii=True,
-    dynamic_ncols=True,
-    mininterval=0.1,
-):
-    """
-    Iterate over `iterable`, calling `step_fn(item)` on each one,
-    and draw a tqdm bar with two metric postfixes.
 
-    :param iterable: any iterable (e.g. list of voltages)
-    :param step_fn: function(item) -> tuple of two numbers (v, i)
-    :param desc: text to show left of bar
-    :param delay: seconds to sleep after each step
-    :param metrics: names for the two returned values, e.g. ("V","I")
-    :return: list of step_fn(item) results
+def run_with_progress(iterable, step_fn, desc="Progress", delay=0.0,
+                      metrics=("V", "I"), ascii=True,
+                      dynamic_ncols=True, mininterval=0.1):
+    
     """
+    Loop items with tqdm and label two returned values.
+
+    Use `metrics` to name the two values from step_fn:
+      - e.g. metrics=("V","I") for voltage/current
+      - e.g. metrics=("Iter","Meas") for iteration vs measurement
+
+    Example:
+        data = run_with_progress(voltages, measure_fn, desc="Sweep",
+                                  metrics=("V","I"))
+        data = run_with_progress(range(5), lambda i: (i, measure(i)),
+                                  desc="Test", metrics=("Iter","Meas"))
+    """
+    
     data = []
-    # build a tqdm bar over the iterable
-    with tqdm(
-        iterable,
-        desc=desc,
-        ascii=ascii,
-        dynamic_ncols=dynamic_ncols,
-        mininterval=mininterval,
-    ) as pbar:
-        for item in pbar:
+    with tqdm(iterable, desc=desc, ascii=ascii,
+              dynamic_ncols=dynamic_ncols,
+              mininterval=mininterval) as progress_bar:
+        for item in progress_bar:
             result = step_fn(item)
             data.append(result)
-            # unpack and show the two metrics
             try:
-                a, b = result
-                pbar.set_postfix({metrics[0]: f"{a:.3f}", metrics[1]: f"{b:.3e}"})
+                v, i = result
+                progress_bar.set_postfix({metrics[0]: f"{v:.3f}", metrics[1]: f"{i:.3e}"})
             except Exception:
                 pass
             if delay:
                 time.sleep(delay)
     return data
 
-def get_logger(
-    name: str,
-    debug: bool = False,
-    fmt: str = "[%(name)s] %(levelname)s: %(message)s",
-) -> logging.Logger:
-    """
-        Return a logger for `name`, configured with a tqdm-based handler
-        so that records go above any progress bars. Subsequent calls
-        won’t add duplicate handlers.
-    """
-    logger = logging.getLogger(name)
-    logger.propagate = False  # prevent double-logging to root
 
-    if not logger.handlers:
-        handler = TqdmLoggingHandler(fmt)
-        logger.addHandler(handler)
-
-    logger.setLevel(logging.DEBUG if debug else logging.INFO)
-    return logger
-
-class TqdmLoggingHandler(logging.Handler):
-    """
-        A logging handler that writes via tqdm.write(), so logs
-        appear above any active tqdm bars without clobbering them.
-    """
+class TqdmHandler(logging.Handler):
+    """Write log messages above active tqdm bars."""
+    
     def __init__(self, fmt):
         super().__init__()
         self.setFormatter(logging.Formatter(fmt))
-
     def emit(self, record):
-        try:
-            msg = self.format(record)
-            tqdm.write(msg)
-        except Exception:
-            self.handleError(record)
+        tqdm.write(self.format(record))
+
+
+class RotatingTxtHandler(RotatingFileHandler):
+    """Rotate logs by size into .txt files without deleting old ones."""
+    
+    def __init__(self, fn, maxBytes, encoding='utf-8', delay=False):
+        super().__init__(fn, 'a', maxBytes, backupCount=0,
+                         encoding=encoding, delay=delay)
+    def getFilesToDelete(self):
+        return []
+
+
+class FolderWarnHandler(logging.Handler):
+    """Warn once when total size of .txt logs in a folder exceeds threshold."""
+    
+    def __init__(self, folder, threshold):
+        super().__init__()
+        self.folder = Path(folder)
+        self.threshold = threshold
+        self.warned = False
+    def emit(self, record):
+        total = sum(f.stat().st_size for f in self.folder.glob('*.txt') if f.is_file())
+        if total >= self.threshold and not self.warned:
+            logging.getLogger(record.name).warning(
+                f"Log folder {self.folder} size {total/1024**2:.1f}MB > "
+                f"{self.threshold/1024**2:.1f}MB"
+            )
+            self.warned = True
+
+
+def get_logger(name, debug=False,
+               fmt="[%(asctime)s] [%(name)s] %(levelname)s: %(message)s", 
+               log_file=None, max_bytes=10*1024*1024, delay=False, 
+               encoding='utf-8', log_folder='logs', folder_threshold=100*1024*1024):
+    """Return a logger with tqdm, rotating txt, and folder size warn handlers."""
+    
+    logger = logging.getLogger(name)
+    logger.propagate = False
+    if not logger.handlers:
+        logger.setLevel(logging.DEBUG if debug else logging.INFO)
+        Path(log_folder).mkdir(parents=True, exist_ok=True)
+        logger.addHandler(TqdmHandler(fmt))
+        path = log_file or f"{name}.txt"
+        fh = RotatingTxtHandler(path, max_bytes, encoding, delay)
+        fh.setFormatter(logging.Formatter(fmt))
+        logger.addHandler(fh)
+        logger.addHandler(FolderWarnHandler(log_folder, folder_threshold))
+    return logger
