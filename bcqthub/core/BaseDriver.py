@@ -3,49 +3,95 @@ import pyvisa
 
 from abc import ABC, abstractmethod
 from bcqthub.controllers.logging_utils import get_logger
+from bcqthub.core.BaseInstrumentConfig import InstrumentConfig
 from collections import OrderedDict  # or just dict() in 3.7+
 
+from typing import Dict, Any, Type
 
 class BaseDriver(ABC):
-    """Abstract base for all VISA instrument drivers."""
+    
+
+    """
+    
+    Abstract base class for all VISA instrument drivers.
+    
+    example usage:
+    
+    # Instrument42.py
+    class Instrument42(BaseDriver):
+        blah blah blah
+        ...
+    
+    # measure.py
+    
+    live_instrument = Instrument42.start_instrument(configs)
+    
+    """
 
     _rm = None  # shared PyVISA ResourceManager singleton
 
-    def __init__(self, configs: dict, debug: bool=True, **kwargs):
+    ConfigModel = InstrumentConfig
+    
+    @classmethod
+        
+    def start_instrument(
+        cls,
+        raw_cfg: Dict[str, Any],
+        debug: bool = False,
+        **driver_kwargs: Any
+    ) -> "BaseDriver":  # -> indicates that this will return a BaseDriver obj
         """
-        :param configs: dict with keys:
-            - 'instrument_name': human-readable name
-            - 'address': VISA resource string (e.g., 'GPIB::9::INSTR')
-            - optional 'rm_backend': PyVISA backend specifier
-        :param debug: if True, set logger to DEBUG level
+            This is a factory method: it validates a raw config dict, instantiates the driver, and returns it.
+
+            :param raw_cfg: Raw settings loaded from YAML/JSON
+            :param debug: Enable driver-level debug logging
+            :param driver_kwargs: Additional keyword args for driver __init__
+            :return: An instance of the driver subclass
         """
-        self.configs = configs
-        self.debug   = debug
-        self.log     = get_logger(self.configs.get("instrument_name", "Driver"), self.debug)
-        self.instrument_name = self.configs.get("instrument_name", "UnknownInstrument")
-        self.address = self.configs.get("address")
+        cfg = cls.ConfigModel(**raw_cfg)
+        return cls(cfg, debug=debug, **driver_kwargs)  # calls itself with given arguments
+
+    
+    def __init__(
+        self,
+        cfg: InstrumentConfig,
+        debug: bool = False,
+        **kwargs: Any
+    ):
+        """
+            Initialize the base driver.
+
+            :param cfg: Validated InstrumentConfig instance
+            :param debug: Enable debug logging
+            :param kwargs: Extra attributes to inject via set_default_attrs
+        """
+        self.cfg = cfg
+        self.debug = debug
+
+        # Use central get_logger
+        self.instrument_name = getattr(cfg, "instrument_name", self.__class__.__name__)
+        self.log = get_logger(self.instrument_name, self.debug)
+        self.log.info(f"Initializing driver: {self.instrument_name}")
+
+        # Required parameter: address for VISA or resource string
+        self.address = getattr(cfg, "address", None)
         if not self.address:
-            raise ValueError("configs must include 'address' key with VISA resource string")
+            raise ValueError(
+                "InstrumentConfig must include 'address' key with resource string"
+            )
 
         # Internal state
         self.resource = None
         self.debug_writes = 0
-
-        # Apply extra attributes
-        self.set_default_attrs(**kwargs)
-
-        # Connect to instrument
-        self.connect()
-        
-        # used for debugging purposes        
         self._last_scpi = None
 
-    def __enter__(self):
-        return self
+        # Apply extra attributes
+        if hasattr(self, 'set_default_attrs'):
+            self.set_default_attrs(**kwargs)
 
-    def __exit__(self, exc_type, exc_val, exc_tb):
-        self.disconnect()
-
+        # Establish connection
+        self.connect()
+        
     def __del__(self):
         self.disconnect()
 
@@ -169,6 +215,41 @@ class BaseDriver(ABC):
         self.log.debug(f"QUERY: {cmd}")
         return self.resource.query(cmd)
 
+    def close(self) -> None:
+        """ Cleanly close the instrument connection and release resources. """
+        if getattr(self, 'resource', None) is not None:
+            try:
+                self.resource.close()
+                self.log.info("Instrument connection closed.")
+            except Exception as e:
+                self.log.warning(f"Error closing resource: {e}")
+            finally:
+                self.resource = None
+                
+    # --- with instrument as xxx methods ---
+    def __enter__(self) -> "BaseDriver":
+        """
+            The driver instance itself for use in a `with` block.
+        """
+        return self
+
+    def __exit__(
+        self,
+        exc_type: type,
+        exc_val: Exception,
+        exc_tb: Any
+    ) -> bool:
+        """
+        Exit the runtime context and perform cleanup.
+
+        Automatically closes the instrument connection.
+
+        Returns:
+            False to propagate exceptions, True to suppress them.
+        """
+        self.close()
+        return False
+
 
     # --- Utility methods ---
     def strip_specials(self, msg: str) -> str:
@@ -245,52 +326,3 @@ class BaseDriver(ABC):
             self.log.warning(f"auto-dump of get_* failed: {e}")
 
         self.log.debug("=== dump_debug_info end ===")
-
-
-
-
-    # def debug_read(self, extra="") -> str:
-    #     self.log.debug(f"{extra} Attempting read (writes={self.debug_writes})")
-    #     result = self.read()
-    #     self.debug_writes = max(0, self.debug_writes - 1)
-    #     self.log.debug(f"Read success (writes={self.debug_writes}): {result}")
-    #     return result
-
-    # def debug_write(self, cmd: str, extra="", count=True):
-    #     self.log.debug(f"{extra} Attempting write '{cmd}' (writes={self.debug_writes})")
-    #     self.write(cmd)
-    #     if count:
-    #         self.debug_writes += 1
-    #     self.log.debug(f"Write success (writes={self.debug_writes})")
-
-    # def debug_force_clear(self):
-    #     """Continuously read until exception to clear buffer."""
-    #     self.debug_writes = 0
-    #     self.log.debug("Starting force clear loop")
-    #     try:
-    #         i = 0
-    #         while True:
-    #             time.sleep(1)
-    #             self.log.debug(f"Force clear iteration {i}")
-    #             self.debug_read()
-    #             i += 1
-    #     except Exception as e:
-    #         self.log.info(f"Force clear stopped: {e}")
-
-    # def debug_queue_script(self, init_cmd=None, sleep_time=0.5, write_cmd_loop=None):
-    #     """Loop read/write to stress-test session stability."""
-    #     self.debug = True
-    #     self.log.debug("Starting debug_queue_script")
-    #     if init_cmd:
-    #         self.debug_write(init_cmd, extra="INIT", count=False)
-    #     count = 0
-    #     try:
-    #         while True:
-    #             if write_cmd_loop:
-    #                 self.debug_write(write_cmd_loop)
-    #             else:
-    #                 self.debug_read()
-    #             count += 1
-    #             time.sleep(sleep_time)
-    #     except KeyboardInterrupt:
-    #         self.log.info(f"debug_queue_script stopped after {count} iterations")

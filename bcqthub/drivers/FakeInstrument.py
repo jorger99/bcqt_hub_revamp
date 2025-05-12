@@ -1,34 +1,43 @@
-# bcqthub/drivers/fake_instrument.py
-from bcqthub.core.driver import BaseDriver
-from bcqthub.logging import get_logger
+"""
+fake_instrument.py
+
+A simple fake instrument driver for testing measurement logic.
+Uses BaseDriver.start_instrument factory, Pydantic config, and context manager support.
+"""
+from controllers.base_driver import BaseDriver, InstrumentConfig
+
 
 class FakeInstrument(BaseDriver):
-    """
-    Stand‐in for any SCPI driver: records history and returns canned responses.
-    Note: DOES NOT call BaseDriver.__init__, so no VISA session is opened.
-    """
-    def __init__(self, cfg, debug=False, responses=None):
-        # intentionally do *not* call super().__init__, so no pyvisa.ResourceManager
-        self.cfg       = cfg
-        self.log       = get_logger(cfg["instrument_name"], debug)
-        self.debug     = debug
-        self.history   = []
-        self.responses = responses or {}
-        self.log.info("Initialized FakeInstrument (no VISA session)")
+    """Fake instrument: logs commands and returns canned responses."""
+    def __init__(self, cfg: InstrumentConfig, debug=False, **kwargs):
+        super().__init__(cfg, debug=debug, **kwargs)
+        self.log = []
 
-    def write(self, cmd):
-        self.history.append(("write", cmd))
-        if self.debug:
-            self.log.debug(f"[FAKE WRITE] {cmd}")
+    def connect(self):
+        """Simulate opening a connection."""
+        self.log.append(("connect", self.cfg.dict()))
 
-    def query(self, cmd):
-        self.history.append(("query", cmd))
-        if self.debug:
-            self.log.debug(f"[FAKE QUERY] {cmd}")
-        for prefix, resp in sorted(self.responses.items(), key=lambda kv: -len(kv[0])):
-            if cmd.startswith(prefix):
-                return resp() if callable(resp) else resp
-        return ""
+    def write(self, cmd: str):
+        """Record the SCPI command instead of sending it."""
+        super().write(cmd)
+        self.log.append(("write", cmd))
 
-    def get_history(self):
-        return list(self.history)
+    def read(self) -> str:
+        """Return last SCPI command as a simple response."""
+        response = self._last_scpi or ""
+        self.log.append(("read", response))
+        return response
+
+    def close(self):
+        """Simulate closing the connection."""
+        super().close()
+        self.log.append(("close", None))
+
+
+# Example usage:
+# raw = {"instrument_name": "FakePSU", "address": "FAKE0"}
+# fake = FakeInstrument.start_instrument(raw, debug=True)
+# with fake as inst:
+#     inst.write("*IDN?")
+#     resp = inst.read()
+# print(fake.log)
