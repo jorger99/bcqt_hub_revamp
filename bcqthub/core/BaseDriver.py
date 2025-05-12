@@ -33,23 +33,22 @@ class BaseDriver(ABC):
     ConfigModel = InstrumentConfig
     
     @classmethod
-        
     def start_instrument(
         cls,
         raw_cfg: Dict[str, Any],
         debug: bool = False,
-        **driver_kwargs: Any
+        **kwargs: Any
     ) -> "BaseDriver":  # -> indicates that this will return a BaseDriver obj
         """
             This is a factory method: it validates a raw config dict, instantiates the driver, and returns it.
 
             :param raw_cfg: Raw settings loaded from YAML/JSON
             :param debug: Enable driver-level debug logging
-            :param driver_kwargs: Additional keyword args for driver __init__
+            :param kwargs: Additional keyword args for driver __init__
             :return: An instance of the driver subclass
         """
-        cfg = cls.ConfigModel(**raw_cfg)
-        return cls(cfg, debug=debug, **driver_kwargs)  # calls itself with given arguments
+        configs = cls.ConfigModel(**raw_cfg)
+        return cls(configs, debug=debug, **kwargs)  # calls itself with given arguments
 
     
     def __init__(
@@ -65,7 +64,7 @@ class BaseDriver(ABC):
             :param debug: Enable debug logging
             :param kwargs: Extra attributes to inject via set_default_attrs
         """
-        self.cfg = cfg
+        self.configs = cfg
         self.debug = debug
 
         # Use central get_logger
@@ -74,8 +73,9 @@ class BaseDriver(ABC):
         self.log.info(f"Initializing driver: {self.instrument_name}")
 
         # Required parameter: address for VISA or resource string
-        self.address = getattr(cfg, "address", None)
-        if not self.address:
+        
+        self.address = self.configs["address"]
+        if self.address is None:
             raise ValueError(
                 "InstrumentConfig must include 'address' key with resource string"
             )

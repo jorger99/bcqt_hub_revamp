@@ -16,20 +16,18 @@ from bcqthub.drivers.KeysightEDU36311A_PowerSupply import KeysightEDU36311A_Powe
 class HEMTController:
     """Controlled soft-start and shutdown for HEMT amplifiers"""
 
-
     def __init__(self, configs, debug=False, driver=KeysightEDU36311A_PowerSupply, **kwargs):
         
         # pick real or fake
         if driver is None:
             from bcqthub.drivers.keysight_edu36311a import KeysightEDU36311A
-            self.psu = KeysightEDU36311A(cfg, debug=debug)
-        elif isinstance(driver, BaseDriver):
-            self.psu = driver
-        elif issubclass(driver, BaseDriver):
-            self.psu = driver(cfg, debug=debug)
-        else:
-            raise ValueError("driver must be None, a BaseDriver subclass, or instance")
-
+            self.psu = KeysightEDU36311A(configs, debug=debug)
+        # elif isinstance(driver, BaseDriver):
+        #     self.psu = driver
+        # elif issubclass(driver, BaseDriver):
+        #     self.psu = driver(cfg, debug=debug)
+        # else:
+        #     raise ValueError("driver must be None, a BaseDriver subclass, or instance")
 
 
         self.debug = debug
@@ -38,9 +36,9 @@ class HEMTController:
         self.log.info("Connecting to Keysight PSU for HEMT control")
         
         # add the ability to insert a different driver besides EDU36311
-        driver_cls    = driver_cls or KeysightEDU36311A_PowerSupply
-        driver_kwargs = driver_kwargs or {}
-        self.psu      = driver_cls(configs, debug=debug, **driver_kwargs)
+        driver_cls    = driver or KeysightEDU36311A_PowerSupply
+        kwargs        = kwargs or {}
+        self.psu      = driver_cls(configs, debug=debug, **kwargs)
         
         self.gate_channel  = kwargs.get("gate_channel", 1)
         self.drain_channel = kwargs.get("drain_channel", 2)
@@ -108,17 +106,21 @@ class HEMTController:
         return data
 
 
-    def turn_on(self, gate_stop, drain_stop, step, delay):
+    def turn_on(self, gate_stop, drain_stop, step, delay, dry_run=False):
         """
             Full soft-start: reset → enable outputs → ramp gate → ramp drain.
             Returns (gate_trace, drain_trace).
         """
         self.log.info("Beginning HEMT soft-start sequence")
+        output_status = self.psu.get_output()
+        gate_ch, drain_ch = self.gate_channel, self.drain_channel
         
-        # cancel this method if the channel is on- 
-        # we cannot go from on to off without ramping!!!
-        if self.psu.get_output() is False:
+        if output_status[gate_ch] is True or output_status[drain_ch] is True:
             raise ZeroDivisionError("We cannot turn the HEMT on if it is currently on!!!!")
+        
+        if dry_run is True:
+            self.log.info("Finished dry run!")
+            return (0, 0)
         
         # get current start values
         gate_start = self.psu.get_channel_voltage(self.gate_channel)
@@ -139,6 +141,9 @@ class HEMTController:
             step=step,
             delay=delay,
         )
+        
+        # TODO: check that gate successfully turned on
+        
         # turn on drain second!!
         drain_data = self.ramp_voltage(
             channel=self.drain_channel,
@@ -152,17 +157,24 @@ class HEMTController:
         return gate_data, drain_data
 
 
-    def turn_off(self, gate_start, drain_start, step, delay):
+    def turn_off(self, step, delay, dry_run=False):
         """
             Full soft-shutdown: ramp drain down → ramp gate down → reset.
             Returns (gate_trace, drain_trace).
         """
         self.log.info("Beginning HEMT soft-shutdown sequence")
+        output_status = self.psu.get_output()
+        gate_ch, drain_ch = self.gate_channel, self.drain_channel
+        
+        if output_status[gate_ch] is False or output_status[drain_ch] is False:
+            raise ZeroDivisionError("We cannot turn the HEMT OFF if it is currently OFF!!!!")
 
         # cancel this method if the channel is on- 
         # we cannot go from on to off without ramping!!!
-        if self.psu.get_output() is True:
-            raise ZeroDivisionError("We cannot turn the HEMT OFF if it is currently OFF!!!!")
+        
+        if dry_run is True:
+            self.log.info("Finished dry run!")
+            return (0, 0)
         
         gate_start = self.psu.get_channel_voltage(self.gate_channel)
         drain_start = self.psu.get_channel_voltage(self.drain_channel)
@@ -172,15 +184,18 @@ class HEMTController:
             channel=self.drain_channel,
             start=drain_start,
             stop=0.0,
-            step=-1*abs(step),
+            step= -1*abs(step),
             delay=delay,
         )
+        
+        # TODO: check that drain successfully turned off
+        
         # turn off voltage second!!
         gate_data = self.ramp_voltage(
             channel=self.gate_channel,
             start=gate_start,
             stop=0.0,
-            step=-1*abs(step),
+            step= -1*abs(step),
             delay=delay,
         )
 
@@ -188,10 +203,17 @@ class HEMTController:
         self.log.info("HEMT soft-shutdown complete")
         return gate_data, drain_data
 
-#################################################
-#################################################
-#################################################
+
+    def preview_ramp():
+        
+        return 
     
+    
+        
+#################################################
+#################################################
+#################################################
+
 import matplotlib.pyplot as plt
 
 def plot_iv_pair(gate_data, drain_data):
@@ -210,14 +232,14 @@ def plot_iv_pair(gate_data, drain_data):
     fig, ax1 = plt.subplots(nrows=1, ncols=1, figsize=(8, 5))
 
     # Gate I–V curve
-    ax1.plot(gate_v, gate_i, 'b*-', label="Ch1 [Gate]")
+    ax1.plot(gate_v, gate_i*1e3, 'b*-', label="Ch1 [Gate]")
     ax1.set_xlabel("Voltage (V)")
-    ax1.set_ylabel("Current (A)")
+    ax1.set_ylabel("Current (mA)")
 
     # Drain I–V curve
-    ax1.plot(drain_v, drain_i, 'r*-', label="Ch2 [Drain]")
+    ax1.plot(drain_v, drain_i*1e3, 'r*-', label="Ch2 [Drain]")
     ax1.set_xlabel("Voltage (V)")
-    ax1.set_ylabel("Current (A)")
+    ax1.set_ylabel("Current (mA)")
 
     ax1.legend()
     fig.suptitle("HEMT I-V Curves")
