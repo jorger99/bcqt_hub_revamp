@@ -16,7 +16,7 @@ ctrl = HEMTController(cfg, debug=False)
 log.info("Soft-starting HEMTs")
 gate_iv_on, drain_iv_on = ctrl.turn_on(
     gate_stop=1.1, drain_stop=0.7,   # volts, volts
-    step=0.02, delay=0.5,            # volts, seconds
+    step=0.02, delay=0.2,            # volts, seconds
     dry_run=False,
 )
 
@@ -27,8 +27,8 @@ plot_iv_pair(gate_iv_on, drain_iv_on)
 
 log.info("Soft-shutting down HEMTs")
 gate_iv_off, drain_iv_off = ctrl.turn_off(
-    step=0.02, delay=0.2,
-    dry_run=False,
+    step=0.02, delay=0.2,   # volts, seconds
+    dry_run=False,          
 )
 
 log.info("Done.")
