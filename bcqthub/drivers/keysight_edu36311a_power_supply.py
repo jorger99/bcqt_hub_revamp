@@ -41,9 +41,9 @@ _USER_MAX_CH_VOLTAGE = {
     3: 30.9,
 }
 _USER_MIN_CH_CURRENT = {
-    1: 0.002,
-    2: 0.001,
-    3: 0.001,
+    1: 0.000,
+    2: 0.000,
+    3: 0.000,
 }
 _USER_MAX_CH_CURRENT = {
     1: 0.005,  # gate current - we want no leakage!
@@ -53,7 +53,7 @@ _USER_MAX_CH_CURRENT = {
 
 _SUPPLY_RESOLVED_DIGITS = 4
 
-class KeysightEDU36311A_PowerSupply(BaseDriver):
+class Keysight_EDU36311A_PSU(BaseDriver):
 
     debug_getters = [
         "get_channel_voltage",   
@@ -242,7 +242,7 @@ class KeysightEDU36311A_PowerSupply(BaseDriver):
         for ch in channels:
             self.write_check(f"OUTP OFF,(@{ch})")
         
-        # 2) zero voltages
+        # 2) zero voltages  # TODO: ramp voltage to be safe
         for ch in channels:
             # select & zero
             self.write_check(f"INST:NSEL {ch}")
@@ -285,7 +285,7 @@ if __name__ == "__main__":
         "address": "",
     }
 
-    psu = KeysightEDU36311A_PowerSupply(cfg)
+    psu = Keysight_EDU36311A_PSU(cfg)
     print(psu.idn())
     psu.set_output(False)           # turn _off_ all channels
     psu.set_channel_voltage(1, 5.0)

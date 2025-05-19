@@ -8,6 +8,7 @@ Minimal logging utilities:
 - FolderWarnHandler: warn once if logs folder grows too big
 - get_logger: set up handlers with defaults
 """
+
 import logging
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
@@ -31,7 +32,9 @@ def run_with_progress(iterable, step_fn, desc="Progress", delay=0.0,
                                   metrics=("V","I"))
         data = run_with_progress(range(5), lambda i: (i, measure(i)),
                                   desc="Test", metrics=("Iter","Meas"))
+                                  
     """
+    
     
     data = []
     with tqdm(iterable, desc=desc, ascii=ascii,
@@ -51,7 +54,7 @@ def run_with_progress(iterable, step_fn, desc="Progress", delay=0.0,
 
 
 class TqdmHandler(logging.Handler):
-    """Write log messages above active tqdm bars."""
+    """ Write log messages above active tqdm bars. """
     
     def __init__(self, fmt):
         super().__init__()
@@ -61,7 +64,7 @@ class TqdmHandler(logging.Handler):
 
 
 class RotatingTxtHandler(RotatingFileHandler):
-    """Rotate logs by size into .txt files without deleting old ones."""
+    """ Rotate logs by size into .txt files without deleting old ones. """
     
     def __init__(self, fn, maxBytes, encoding='utf-8', delay=False):
         super().__init__(fn, 'a', maxBytes, backupCount=0,
@@ -70,8 +73,8 @@ class RotatingTxtHandler(RotatingFileHandler):
         return []
 
 
-class FolderWarnHandler(logging.Handler):
-    """Warn once when total size of .txt logs in a folder exceeds threshold."""
+class FolderWarnHandler(logging. Handler):
+    """ Check and warn if total size of .txt logs in a folder exceeds threshold. Never deletes. """
     
     def __init__(self, folder, threshold):
         super().__init__()
@@ -92,7 +95,7 @@ def get_logger(name, debug=False,
                fmt="[%(asctime)s] [%(name)s] %(levelname)s: %(message)s", 
                log_file=None, max_bytes=10*1024*1024, delay=False, 
                encoding='utf-8', log_folder='logs', folder_threshold=100*1024*1024):
-    """Return a logger with tqdm, rotating txt, and folder size warn handlers."""
+    """ Implements RotatingTxt and TQDM methods to return a fully functional logger. """
     
     logger = logging.getLogger(name)
     logger.propagate = False

@@ -2,7 +2,7 @@ import time
 import datetime
 from bcqthub.core.BaseDriver import BaseDriver
 
-class RohdeSchwarzFSEB20_SpectrumAnalyzer(BaseDriver):
+class RnS_FSEB20_SA(BaseDriver):
     """Rohde & Schwarz FSEB20 spectrum analyzer driver."""
 
     def __init__(self, configs: dict, debug: bool = False, **kwargs):
@@ -112,7 +112,7 @@ if __name__ == "__main__":
         "instrument_name": "RS_SpectrumAnalyzer",
         "address": "GPIB::20::INSTR",
     }
-    RS_SpectrumAnalyzer = RohdeSchwarzFSEB20_SpectrumAnalyzer(cfg)
+    RS_SpectrumAnalyzer = RnS_FSEB20_SA(cfg)
     
     print(RS_SpectrumAnalyzer.idn())
     
