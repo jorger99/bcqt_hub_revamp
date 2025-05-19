@@ -4,7 +4,7 @@ from bcqthubrevamp.controllers.HEMTController import HEMTController
 from bcqthubrevamp.controllers.logging_utils import get_logger
 
 log = get_logger("power_cycle_HEMTs", debug=False)
-log.info("Starting HEMT power-cycle script")
+# log.info("Starting HEMT power-cycle script")
 
 
 ###########################################################################
@@ -16,8 +16,9 @@ cfg = {
     "address"                : "TCPIP0::192.168.0.106::inst0::INSTR",
     "gate_channel"           : 1,
     "drain_channel"          : 2,
-    "fake_instrument_mode"   : True,   # <--------
+    "fake_instrument_mode"   : False,   # <-------- used for testing
 } 
+
 ctrl = HEMTController(cfg, debug=False)
 
 script_stepsize = 0.02      # voltage step between.. steps  -> around 0.02 is good
@@ -61,8 +62,8 @@ ctrl.plot_iv_pair(gate_iv_on, drain_iv_on, optional_times=(gate_times_on, drain_
 #################     using the turn_off() commands      ##################
 ###########################################################################
 
-if cfg["fake_instrument_mode"] is True:
-    ctrl.psu.channel_outputs = [True, True, True]
+# if cfg["fake_instrument_mode"] is True:
+#     ctrl.psu.channel_outputs = [True, True, True]
 
 # send a turn_off() command, ramps from current voltage to zero, no need for array
 iv_curves_off, times_off = ctrl.turn_off(delay=script_delay, 
@@ -73,10 +74,10 @@ gate_iv_off, drain_iv_off = iv_curves_off
 gate_times_off, drain_times_off = times_off
 
 # plotting method, adding 'optional_times' creates a second figure
-ctrl.plot_iv_pair(gate_iv_off, drain_iv_off, optional_times=(gate_times_off, drain_times_off))
+ctrl.plot_iv_pair(gate_iv_off, drain_iv_off,  optional_times=(gate_times_off, drain_times_off))
 
 # Now show a single comprehensive dump of the instrument state
-log.info("Done!")
+# log.info("Done!")
 ctrl.dump_debug()
      
 

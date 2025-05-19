@@ -13,7 +13,7 @@ class HEMTController:
 
     def __init__(self, configs, debug=False, driver=Keysight_EDU36311A_PSU, **kwargs):
         
-        self.fake_mode = configs.get("fake_instrument_mode", True)
+        self.fake_mode = configs.get("fake_instrument_mode", False)
         self.debug = debug
         self.log   = get_logger("HEMTController", debug)
         self.log.info("Connecting to Keysight PSU for HEMT control")
@@ -97,9 +97,9 @@ class HEMTController:
         self.psu.log.disabled = not self.debug
 
         # per-step action to run within run_with_progress
-        def step_fn(voltage):
+        def step_fn(voltage, channel):
             timestamps.append(time.perf_counter())  # better for elapsed times
-            self.psu.set_channel_voltage(voltage, channel)
+            self.psu.set_channel_voltage(channel, voltage)
             V, I = self.psu.get_channel_voltage(channel), self.psu.get_channel_current(channel)
             return (V, I)
 
@@ -110,6 +110,8 @@ class HEMTController:
             desc=f"CH{channel} {start:.3f}→{stop:.3f}V",
             delay=delay,
             metrics=("V", "I"),
+            # fn_kwargs
+            channel=channel,
         )
 
         # DEBUG: Restore the PSU logger’s prior state
@@ -259,10 +261,15 @@ class HEMTController:
         gate_v, gate_i = np.array(gate_v), np.array(gate_i)
         drain_v, drain_i = np.array(drain_v), np.array(drain_i)
 
+        # unpack the final values for plots later
+        final_gate_v, final_drain_v  = gate_v[-1], drain_v[-1]
+        final_gate_i, final_drain_i  = gate_i[-1], gate_i[-1]
+        
         # Create subplots
         # fig, (ax1, ax2) = plt.subplots(nrows=2, ncols=1, figsize=(8, 8))
-        fig1, ax1 = plt.subplots(nrows=1, ncols=1, figsize=(8, 5))
-    
+        fig1, ax1_1 = plt.subplots(nrows=1, ncols=1, figsize=(8, 5))
+        figs.append(fig1)
+        
         # several arrows on the line
         # compute deltas
         dVg = np.diff(gate_v)
@@ -284,7 +291,7 @@ class HEMTController:
             dVd, dId = -1*np.abs(dVd), -1*np.abs(dId)
         
         # gate IV curve
-        ax1.quiver(
+        ax1_1.quiver(
             gate_v[:-1:skip_idx], gate_i[:-1:skip_idx]*1e3,  # origins
             dVg[::skip_idx],         dIg[::skip_idx],              # deltas
             angles="xy", scale_units="xy", scale=scale, pivot='mid', 
@@ -292,7 +299,7 @@ class HEMTController:
         )
         
         # drain IV curve
-        ax1.quiver(
+        ax1_1.quiver(
             drain_v[:-1:skip_idx], drain_i[:-1:skip_idx]*1e3,
             dVd[::skip_idx],          dId[::skip_idx],
             angles="xy", scale_units="xy", scale=scale, pivot='mid',
@@ -300,16 +307,16 @@ class HEMTController:
         )
         
         # Gate I–V curve
-        ax1.plot(gate_v, gate_i*1e3, 'bo:', label="Ch1 [Gate]", alpha=0.8, markersize=markersize)
-        ax1.plot(drain_v, drain_i*1e3, 'ro:', label="Ch2 [Drain]", alpha=0.8, markersize=markersize)
+        ax1_1.plot(gate_v, gate_i*1e3, 'bo', label="Ch1 [Gate]", alpha=1.0, markersize=markersize)
+        ax1_1.plot(drain_v, drain_i*1e3, 'ro', label="Ch2 [Drain]", alpha=1.0, markersize=markersize)
 
-        ax1.set_xlabel("Voltage (V)")
-        ax1.set_ylabel("Current (mA)")
+        ax1_1.set_xlabel("Voltage (V)")
+        ax1_1.set_ylabel("Current (mA)")
 
-        ax1.legend()
+        ax1_1.legend()
         
-        ax1.axhline(0, color='k', linestyle='--', alpha=0.8)
-        ax1.axvline(0, color='k', linestyle='--', alpha=0.8)
+        ax1_1.axhline(0, color='k', linestyle='--', alpha=0.8)
+        ax1_1.axvline(0, color='k', linestyle='--', alpha=0.8)
 
         if self.fake_mode is True:
             fig1.suptitle("FakePSU IV Curve (Ω=40, Ω=70)")
@@ -320,8 +327,14 @@ class HEMTController:
         fig1.tight_layout()
         figs.append(fig1)
         
+        
+        ax1_1.text(0.1, 0.93, f"\n[Ch{self.gate_channel}] → Final $V_g$ = {final_gate_v:.2f} V", transform=ax1_1.transAxes)
+        ax1_1.text(0.1, 0.88, f"\n[Ch{self.drain_channel}] → Final $V_d$ = {final_drain_v:.2f} V", transform=ax1_1.transAxes)
+
+
+        # create V(t) and I(t) graphs
         if optional_times is not None:
-            
+            # unpack container
             gate_times, drain_times = optional_times
             
             # convert to milliseconds if necessary
@@ -331,50 +344,50 @@ class HEMTController:
                 drain_times *= 1e3
             
             # start plotting
-            fig2, (ax1, ax2) = plt.subplots(nrows=2, ncols=1, figsize=(8, 8))
-                
+            fig2, (ax2_1, ax2_2) = plt.subplots(nrows=2, ncols=1, figsize=(8, 8))
+            
             # Gate V(t) curve
-            ax1.plot(gate_times, gate_v*1e3, 'bo:', label="Ch1 [Gate Voltage]", alpha=0.8, markersize=markersize)
-            ax1.plot(drain_times, drain_v*1e3, 'ro:', label="Ch2 [Drain Voltage]", alpha=0.8, markersize=markersize)
+            ax2_1.plot(gate_times, gate_v*1e3, 'bo-', label="Ch1 [Gate Voltage]", alpha=1.0, markersize=markersize)
+            ax2_1.plot(drain_times, drain_v*1e3, 'ro-', label="Ch2 [Drain Voltage]", alpha=1.0, markersize=markersize)
 
             # Gate I(t) curve
-            ax2.plot(gate_times, gate_i*1e3, 'bo:', label="Ch1 [Gate Current]", alpha=0.8, markersize=markersize)
-            ax2.plot(drain_times, drain_i*1e3, 'ro:', label="Ch2 [Drain Current]", alpha=0.8, markersize=markersize)
+            ax2_2.plot(gate_times, gate_i*1e3, 'bo-', label="Ch1 [Gate Current]", alpha=0.8, markersize=markersize)
+            ax2_2.plot(drain_times, drain_i*1e3, 'ro-', label="Ch2 [Drain Current]", alpha=0.8, markersize=markersize)
 
-            ax1.set_ylabel("Voltage (V)")
-            ax2.set_ylabel("Current (mA)")
+            ax2_1.set_ylabel("Voltage (V)")
+            ax2_2.set_ylabel("Current (mA)")
             
-            ax1.set_title("Gate & Drain Voltages")
-            ax2.set_title("Gate & Drain Currents")
-            
-            for ax in [ax1, ax2]:
+            ax2_1.set_title("Gate & Drain Voltages")
+            ax2_2.set_title("Gate & Drain Currents")
+                       
+            for ax in [ax2_1, ax2_2]:
                 ax.set_xlabel("Time [ms]")
                 ax.axhline(0, color='k', linestyle='--', alpha=0.8)
                 ax.axvline(0, color='k', linestyle='--', alpha=0.8)
                 ax.legend()
 
-        
-        
+        # make sure that user knows a test instrument was used
+        if self.fake_mode is True:
+            for ax in [ax1_1, ax2_1, ax2_2]:
+                ax.text(0.6, 0.7, "FakeInstrument in use", transform=ax.transAxes, color='red')
+                    
         # Build a dynamic title and set it on each figure
         # e.g. "2025-05-18 16:42:03 | Gate→1.10V, Drain→0.70V"
         ts = datetime.now().strftime("%B %d, %Y %I:%M:%S %p")
-        final_gate_v  = gate_data[-1][0]
-        final_drain_v = drain_data[-1][0]
-        title = (
-            f"{"FakeInstrument Debug Mode\n" if self.fake_mode is True else ""}"
-            f"{ts}\n"
-            f"\nFinal Gate Voltages:"
-            f"\n[Ch{self.gate_channel}] → {final_gate_v:.2f}V"
-            f"\n[Ch{self.drain_channel}] → {final_drain_v:.2f}V"
-        )
-
+        
+        # create titles
+        title = f"{ts}\n"
+        final_title_fig1 = "HEMTController - IV Curve\n" + title
+        final_title_fig2 = "HEMTController - V(t) and I(t) plots\n" + title
+        
+        fig1.suptitle(final_title_fig1)
+        fig2.suptitle(final_title_fig2)
+        
         # Apply to all figures
         #   fig1 -> IV curve
-        #   fig2 -> optional timess
+        #   fig2 -> optional times
         for fig in [fig1, fig2]:
-            fig.suptitle(title)
             fig.tight_layout()
-            figs.append(fig)
             
         
         return figs

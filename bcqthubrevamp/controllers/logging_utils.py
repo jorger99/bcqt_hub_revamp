@@ -18,7 +18,8 @@ import time
 
 def run_with_progress(iterable, step_fn, desc="Progress", delay=0.0,
                       metrics=("V", "I"), ascii=True,
-                      dynamic_ncols=True, mininterval=0.1):
+                      dynamic_ncols=True, mininterval=0.1,
+                      **fn_kwargs):
     
     """
     Loop items with tqdm and label two returned values.
@@ -41,7 +42,7 @@ def run_with_progress(iterable, step_fn, desc="Progress", delay=0.0,
               dynamic_ncols=dynamic_ncols,
               mininterval=mininterval) as progress_bar:
         for item in progress_bar:
-            result = step_fn(item)
+            result = step_fn(item, **fn_kwargs)
             data.append(result)
             try:
                 v, i = result
