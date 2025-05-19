@@ -4,30 +4,30 @@ import math
 from bcqthubrevamp.core.BaseDriver import BaseDriver
 from bcqthubrevamp.controllers.logging_utils import get_logger
 
-# Factory limits (from manufacturer data sheet)
-_FACTORY_MIN_VOLTAGE = {
-    1: 0.0,    # CH1 P6V
-    2: 0.0,    # CH2 P30V
-    3: 0.0,    # CH3 N30V
-}
+# # Factory limits (from manufacturer data sheet)
+# _FACTORY_MIN_VOLTAGE = {
+#     1: 0.0,    # CH1 P6V
+#     2: 0.0,    # CH2 P30V
+#     3: 0.0,    # CH3 N30V
+# }
 
-_FACTORY_MAX_VOLTAGE = {
-    1: 6.18,   # CH1 P6V
-    2: 30.9,   # CH2 P30V
-    3: 30.9,   # CH3 N30V
-}
+# _FACTORY_MAX_VOLTAGE = {
+#     1: 6.18,   # CH1 P6V
+#     2: 30.9,   # CH2 P30V
+#     3: 30.9,   # CH3 N30V
+# }
 
-_FACTORY_MIN_CURRENT = {
-    1: 0.002,  # CH1 P6V
-    2: 0.001,  # CH2 P30V
-    3: 0.001,  # CH3 N30V
-}
+# _FACTORY_MIN_CURRENT = {
+#     1: 0.002,  # CH1 P6V
+#     2: 0.001,  # CH2 P30V
+#     3: 0.001,  # CH3 N30V
+# }
 
-_FACTORY_MAX_CURRENT = {
-    1: 5.15,   # CH1 P6V
-    2: 1.03,   # CH2 P30V
-    3: 1.03,   # CH3 N30V
-}
+# _FACTORY_MAX_CURRENT = {
+#     1: 5.15,   # CH1 P6V
+#     2: 1.03,   # CH2 P30V
+#     3: 1.03,   # CH3 N30V
+# }
 
 # values chosen for HEMTs!! 04/30/2025
 _USER_MIN_CH_VOLTAGE = {
@@ -46,9 +46,9 @@ _USER_MIN_CH_CURRENT = {
     3: 0.000,
 }
 _USER_MAX_CH_CURRENT = {
-    1: 0.005,  # gate current - we want no leakage!
-    2: 0.05,   # drain current - limit the amount of flow!
-    3: 1.03,
+    1: 0.005,  # ch1 gate current - we want no leakage!
+    2: 0.5,    # ch2 drain current - limit the amount of flow!
+    3: 1.03,   # ch3 factory limit
 }
 
 _SUPPLY_RESOLVED_DIGITS = 4
@@ -80,16 +80,16 @@ class Keysight_EDU36311A_PSU(BaseDriver):
         self.log = get_logger(self.instrument_name, self.debug)
         
         # Point these four attributes at either the factory or user dicts:
-        if self.use_factory_limits:
-            self._min_voltage = _FACTORY_MIN_VOLTAGE
-            self._max_voltage = _FACTORY_MAX_VOLTAGE
-            self._min_current = _FACTORY_MIN_CURRENT
-            self._max_current = _FACTORY_MAX_CURRENT
-        else:
-            self._min_voltage = _USER_MIN_CH_VOLTAGE
-            self._max_voltage = _USER_MAX_CH_VOLTAGE
-            self._min_current = _USER_MIN_CH_CURRENT
-            self._max_current = _USER_MAX_CH_CURRENT
+        # if self.use_factory_limits:
+        #     self._min_voltage = _FACTORY_MIN_VOLTAGE
+        #     self._max_voltage = _FACTORY_MAX_VOLTAGE
+        #     self._min_current = _FACTORY_MIN_CURRENT
+        #     self._max_current = _FACTORY_MAX_CURRENT
+        # else:
+        self._min_voltage = _USER_MIN_CH_VOLTAGE
+        self._max_voltage = _USER_MAX_CH_VOLTAGE
+        self._min_current = _USER_MIN_CH_CURRENT
+        self._max_current = _USER_MAX_CH_CURRENT
         
         # Initialize stored setpoints:
         #   voltages = min (safe default), currents = max (so voltage ramp isn't stuck)
@@ -102,18 +102,18 @@ class Keysight_EDU36311A_PSU(BaseDriver):
         Return (vmin, vmax, imin, imax) for the given channel,
         based on self.use_factory_limits, and log which set was used.
         """
-        if self.use_factory_limits:
-            src = "FACTORY"
-            vmin = _FACTORY_MIN_VOLTAGE[channel]
-            vmax = _FACTORY_MAX_VOLTAGE[channel]
-            imin = _FACTORY_MIN_CURRENT[channel]
-            imax = _FACTORY_MAX_CURRENT[channel]
-        else:
-            src = "USER"
-            vmin = _USER_MIN_CH_VOLTAGE[channel]
-            vmax = _USER_MAX_CH_VOLTAGE[channel]
-            imin = _USER_MIN_CH_CURRENT[channel]
-            imax = _USER_MAX_CH_CURRENT[channel]
+        # if self.use_factory_limits:
+        #     src = "FACTORY"
+        #     vmin = _FACTORY_MIN_VOLTAGE[channel]
+        #     vmax = _FACTORY_MAX_VOLTAGE[channel]
+        #     imin = _FACTORY_MIN_CURRENT[channel]
+        #     imax = _FACTORY_MAX_CURRENT[channel]
+        # else:
+        src = "USER"
+        vmin = _USER_MIN_CH_VOLTAGE[channel]
+        vmax = _USER_MAX_CH_VOLTAGE[channel]
+        imin = _USER_MIN_CH_CURRENT[channel]
+        imax = _USER_MAX_CH_CURRENT[channel]
 
         # Log at DEBUG so you can see it when debug=True
         self.log.debug(
@@ -161,7 +161,7 @@ class Keysight_EDU36311A_PSU(BaseDriver):
         elif isinstance(channel, (int, float)) and int(channel) in (1, 2, 3):
             num = int(channel)
         else:
-            raise ValueError("Channel must be 1,2,3 or 'ch1','ch2','ch3'")
+            raise ValueError(f"Channel must be 1,2,3 or 'ch1','ch2','ch3'\n  Received: `{channel}` (type {type(channel)})")
         return num
 
     def get_channel_voltage(self, channel):
