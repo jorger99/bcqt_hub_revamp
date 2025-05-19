@@ -1,4 +1,4 @@
-from bcqthub.core.BaseDriver import BaseDriver
+from bcqthubrevamp.core.BaseDriver import BaseDriver
 
 class AnritsuMG369XX_SignalGenerator(BaseDriver):
     """Anritsu signal generator driver using SCPI."""

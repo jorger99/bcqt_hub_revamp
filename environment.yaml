@@ -1,0 +1,24 @@
+name: bcqthubrevamp
+channels:
+  - conda-forge
+dependencies:
+  - ca-certificates
+  - certifi
+  - ipykernel
+  - ipython
+  - matplotlib
+  - numpy
+  - openssl
+  - pandas
+  - pyro4
+  - python=3.12.3
+  - pyvisa
+  - pyvisa-py
+  - scipy
+  - zeroconf
+  - h5py
+  - ipywidgets
+  - pymeasure
+  - dill
+  - regex
+  - tabulate

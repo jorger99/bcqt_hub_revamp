@@ -1,6 +1,6 @@
 import time
 import datetime
-from bcqthub.core.BaseDriver import BaseDriver
+from bcqthubrevamp.core.BaseDriver import BaseDriver
 
 class RnS_FSEB20_SA(BaseDriver):
     """Rohde & Schwarz FSEB20 spectrum analyzer driver."""

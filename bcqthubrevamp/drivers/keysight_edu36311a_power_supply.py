@@ -1,8 +1,8 @@
 import time
 import math
 
-from bcqthub.core.BaseDriver import BaseDriver
-from bcqthub.controllers.logging_utils import get_logger
+from bcqthubrevamp.core.BaseDriver import BaseDriver
+from bcqthubrevamp.controllers.logging_utils import get_logger
 
 # Factory limits (from manufacturer data sheet)
 _FACTORY_MIN_VOLTAGE = {

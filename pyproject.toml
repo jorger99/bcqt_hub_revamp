@@ -1,0 +1,22 @@
+[build-system]
+requires = ["setuptools", "setuptools-scm"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "bcqthubrevamp"
+version = "1.0.0"
+authors = [
+  { name="Jorge Ramirez", email="jorge.ramirez@colorado.edu" },
+]
+description = 'An OOP-focused rewriting of bcqthub code'
+readme = "README.md"
+requires-python = ">=3.10"
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Operating System :: OS Independent",
+    "License :: OSI Approved :: MIT License",
+]
+
+
+[tool.setuptools]
+packages = ["bcqthubrevamp"]

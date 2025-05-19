@@ -2,8 +2,8 @@ import time, inspect
 import pyvisa
 
 from abc import ABC, abstractmethod
-from bcqthub.controllers.logging_utils import get_logger
-from bcqthub.core.BaseInstrumentConfig import InstrumentConfig
+from bcqthubrevamp.controllers.logging_utils import get_logger
+from bcqthubrevamp.core.BaseInstrumentConfig import InstrumentConfig
 from collections import OrderedDict  # or just dict() in 3.7+
 
 from typing import Dict, Any, Type

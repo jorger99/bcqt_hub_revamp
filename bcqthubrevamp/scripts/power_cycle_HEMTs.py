@@ -1,7 +1,7 @@
 # bcqthub/scripts/power_cycle_HEMTs.py
 
-from bcqthub.controllers.HEMTController import HEMTController
-from bcqthub.controllers.logging_utils import get_logger
+from bcqthubrevamp.controllers.HEMTController import HEMTController
+from bcqthubrevamp.controllers.logging_utils import get_logger
 
 log = get_logger("power_cycle_HEMTs", debug=False)
 log.info("Starting HEMT power-cycle script")

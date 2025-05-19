@@ -5,9 +5,9 @@ fake_instrument.py
 A simple fake instrument driver for testing measurement logic.
 Uses BaseDriver.start_instrument factory, Pydantic config, and context manager support.
 """
-from bcqthub.drivers.rohde_schwarz_fseb20_spectrumanalyzer import RnS_FSEB20_SA
-from bcqthub.core.BaseDriver import BaseDriver
-from bcqthub.core.BaseInstrumentConfig import InstrumentConfig
+from bcqthubrevamp.drivers.rohde_schwarz_fseb20_spectrumanalyzer import RnS_FSEB20_SA
+from bcqthubrevamp.core.BaseDriver import BaseDriver
+from bcqthubrevamp.core.BaseInstrumentConfig import InstrumentConfig
 
 
 class FakePSU(BaseDriver):

@@ -1,7 +1,7 @@
 # bcqthub/controllers/hemt_controller.py
 
-from bcqthub.controllers.logging_utils import get_logger, run_with_progress
-from bcqthub.drivers.keysight_edu36311a_power_supply import Keysight_EDU36311A_PSU
+from bcqthubrevamp.controllers.logging_utils import get_logger, run_with_progress
+from bcqthubrevamp.drivers.keysight_edu36311a_power_supply import Keysight_EDU36311A_PSU
 import numpy as np
 import logging
 import matplotlib.pyplot as plt
@@ -20,7 +20,7 @@ class HEMTController:
         
         # if the user asked for dry_run, force the fake as driver
         if self.fake_mode is True:
-            from bcqthub.drivers.FakePSU import FakePSU
+            from bcqthubrevamp.drivers.FakePSU import FakePSU
             driver_cls = FakePSU
         else:
             driver_cls = driver or Keysight_EDU36311A_PSU
