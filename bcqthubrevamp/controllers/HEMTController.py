@@ -159,10 +159,13 @@ class HEMTController:
         gate_voltage = self.psu.get_channel_voltage(self.gate_channel)
         
         if gate_voltage < gate_voltages[-1]:
-            error_text = f"Gate channel {self.gate_channel} did not reach correct gate voltage?" + \
-            f" \n    Target={gate_voltages[-1]}" +   \
+            error_text = (
+            f"\nGate channel {self.gate_channel} did not reach correct gate voltage?"
+            f" \n    Target={gate_voltages[-1]}"
             f" \n    Value={gate_voltage}"
-            
+            f" \n    Aborting start-up sequence, resetting system to default off state"
+            )
+            self.reset()
             raise ValueError(error_text)
         
         #################################

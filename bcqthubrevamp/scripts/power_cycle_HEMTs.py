@@ -10,7 +10,6 @@ log = get_logger("power_cycle_HEMTs", debug=False)
 ###########################################################################
 #######  set fake_instrument_mode = True for testing purposes  ############
 ###########################################################################
-
 cfg = {
     "instrument_name"        : "HEMT_PSU",
     "address"                : "TCPIP0::192.168.0.106::inst0::INSTR",
@@ -28,7 +27,7 @@ script_delay = 0.008        # time between voltage step     -> around 0.1 is goo
 ##################     using the turn_on() commands      ##################
 ###########################################################################
 
-# ping machine for current channel voltage values
+# ping machine for cu`rrent channel voltage values
 gate_start = ctrl.psu.get_channel_voltage(ctrl.gate_channel)
 drain_start = ctrl.psu.get_channel_voltage(ctrl.drain_channel)
 
@@ -80,6 +79,3 @@ ctrl.plot_iv_pair(gate_iv_off, drain_iv_off,  optional_times=(gate_times_off, dr
 # log.info("Done!")
 ctrl.dump_debug()
      
-
-
-
