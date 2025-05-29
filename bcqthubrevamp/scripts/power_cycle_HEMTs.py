@@ -18,7 +18,7 @@ cfg = {
     "fake_instrument_mode"   : False,   # <-------- used for testing
 } 
 
-ctrl = HEMTController(cfg, debug=False)
+ctrl = HEMTController(cfg, suppress_logs=False)
 
 script_stepsize = 0.02      # voltage step between.. steps  -> around 0.02 is good
 script_delay = 0.008        # time between voltage step     -> around 0.1 is good

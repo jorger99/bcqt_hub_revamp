@@ -92,7 +92,7 @@ class FolderWarnHandler(logging. Handler):
             self.warned = True
 
 
-def get_logger(name, debug=False,
+def get_logger(name, debug=False, suppress_all_logs=False,
                fmt="[%(asctime)s] [%(name)s] %(levelname)s: %(message)s", 
                log_file=None, max_bytes=10*1024*1024, delay=False, 
                encoding='utf-8', log_folder='logs', folder_threshold=100*1024*1024):
@@ -100,6 +100,7 @@ def get_logger(name, debug=False,
     
     logger = logging.getLogger(name)
     logger.propagate = False
+    
     if not logger.handlers:
         logger.setLevel(logging.DEBUG if debug else logging.INFO)
         Path(log_folder).mkdir(parents=True, exist_ok=True)
@@ -109,4 +110,9 @@ def get_logger(name, debug=False,
         fh.setFormatter(logging.Formatter(fmt))
         logger.addHandler(fh)
         logger.addHandler(FolderWarnHandler(log_folder, folder_threshold))
+    
+    # patch to disable logs
+    if suppress_all_logs is True:
+        logging.disable(logging.CRITICAL)    
+    
     return logger

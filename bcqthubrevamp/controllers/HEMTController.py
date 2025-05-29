@@ -11,12 +11,13 @@ from datetime import datetime
 class HEMTController:
     """Controlled soft-start and shutdown for HEMT amplifiers"""
 
-    def __init__(self, configs, debug=False, driver=Keysight_EDU36311A_PSU, **kwargs):
+    def __init__(self, configs, suppress_logs=False, driver=Keysight_EDU36311A_PSU, **kwargs):
         
         self.fake_mode = configs.get("fake_instrument_mode", False)
-        self.debug = debug
-        self.log   = get_logger("HEMTController", debug)
+        self.debug = suppress_logs
         self.log.info("Connecting to Keysight PSU for HEMT control")
+        
+        self.log   = get_logger("HEMTController", suppress_all_logs=suppress_logs)
         
         # if the user asked for dry_run, force the fake as driver
         if self.fake_mode is True:
@@ -26,7 +27,7 @@ class HEMTController:
             driver_cls = driver or Keysight_EDU36311A_PSU
         
         kwargs             = kwargs or {}
-        self.psu           = driver_cls(configs, debug=debug, **kwargs)
+        self.psu           = driver_cls(configs, debug=suppress_logs, **kwargs)
         self.gate_channel = configs.get("gate_channel",1)
         self.drain_channel = configs.get("drain_channel",2)
         
