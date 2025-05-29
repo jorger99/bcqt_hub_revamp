@@ -113,6 +113,7 @@ class HEMTController:
             metrics=("V", "I"),
             # fn_kwargs
             channel=channel,
+            disable_tqdm=False,
         )
 
         # DEBUG: Restore the PSU logger’s prior state

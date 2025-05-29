@@ -19,6 +19,7 @@ import time
 def run_with_progress(iterable, step_fn, desc="Progress", delay=0.0,
                       metrics=("V", "I"), ascii=True,
                       dynamic_ncols=True, mininterval=0.1,
+                      disable_tqdm=False,
                       **fn_kwargs):
     
     """
@@ -36,11 +37,11 @@ def run_with_progress(iterable, step_fn, desc="Progress", delay=0.0,
                                   
     """
     
-    
     data = []
     with tqdm(iterable, desc=desc, ascii=ascii,
               dynamic_ncols=dynamic_ncols,
-              mininterval=mininterval) as progress_bar:
+              mininterval=mininterval,
+              disable=disable_tqdm) as progress_bar:
         for item in progress_bar:
             result = step_fn(item, **fn_kwargs)
             data.append(result)
